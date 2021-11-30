@@ -4,12 +4,22 @@ import datetime
 from .llapi import LLAPI
 
 try:
+    # Required only when calling API methods
     import pandas as pd
 except ImportError:
     pd = None
 
 
+def check_pandas(func):
+    def wrapper(*args, **kwargs):
+        assert pd is not None
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 class API(LLAPI):
+    @check_pandas
     def daily_range_df(
         self,
         start_date: datetime.date,

@@ -1,11 +1,9 @@
 import datetime
-import typing as ty
-
-from urllib.parse import urljoin
 from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Union
+from urllib.parse import urljoin
 
 from requests_cache import CachedSession
-
 
 BASE_URL = "https://tassidicambio.bancaditalia.it/terzevalute-wf-web/rest/v1.0/"
 DEFAULT_CACHE = Path("~/.cache/bixr").expanduser()
@@ -17,14 +15,9 @@ EXPIRE_OVERRIDES = {
     # "**annual": 3600 * 24 * 365,
 }
 
-# All dates are in CET/CEST
-# Data is only available for (Italian) workdays
-# Rates can be Base/quote (C) or quote/base (I) see `exchangeConventionCode`
-# Ranges include both extremes
-
 
 class LLAPI:
-    def __init__(self, lang="en"):
+    def __init__(self, lang: str = "en"):
         self.lang = lang
         self.session = CachedSession(
             DEFAULT_CACHE,
@@ -33,14 +26,18 @@ class LLAPI:
         )
         self.session.headers["Accept"] = "application/json"
 
-    def _request(self, method: str, params: ty.Dict[str, str]):
+    def _request(self, method: str, params: Dict[str, Union[str, List[str]]]):
         params.setdefault("lang", self.lang)
         url = urljoin(BASE_URL, method)
+        # TODO: check url child of BASE_URL
+
         resp = self.session.get(url, params=params)
         resp.raise_for_status()
         resp_json = resp.json()
-        # resp_json always has `resultsInfo` and another key with the data
+
+        # Check that data length matches metadata
         if "totalRecords" in resp_json["resultsInfo"]:
+            # resp_json always has `resultsInfo` and another key with the data
             (other_key,) = filter(lambda k: k != "resultsInfo", resp_json.keys())
             assert len(resp_json[other_key]) == resp_json["resultsInfo"]["totalRecords"]
         return resp_json
@@ -48,27 +45,29 @@ class LLAPI:
     def _request_with_lang(
         self,
         method: str,
-        lang: ty.Optional[str],
-        params: ty.Dict[str, str],
+        lang: Optional[str],
+        params: Dict[str, Union[str, List[str]]],
     ):
         params = params.copy()
-        assert "lang" not in params
+        assert (
+            "lang" not in params
+        ), "Either use `_request` with `lang` set, or use `_request_with_lang` with `lang` as argument"
         if lang:
             params["lang"] = lang
         return self._request(method, params)
 
-    def latest(self, lang: ty.Optional[str] = None):
+    def latest(self, lang: Optional[str] = None):
         return self._request_with_lang("latestRates", lang, {})
 
-    def currencies(self, lang: ty.Optional[str] = None):
+    def currencies(self, lang: Optional[str] = None):
         return self._request_with_lang("currencies", lang, {})
 
     def daily(
         self,
         date: datetime.date,
         quote_currency: str,
-        base_currency: ty.Optional[ty.Union[str, ty.Iterable[str]]] = None,
-        lang: ty.Optional[str] = None,
+        base_currency: Optional[Union[str, Iterable[str]]] = None,
+        lang: Optional[str] = None,
     ):
         params = {"referenceDate": date.isoformat(), "currencyIsoCode": quote_currency}
         if isinstance(base_currency, str):
@@ -83,8 +82,8 @@ class LLAPI:
         year: int,
         month: int,
         quote_currency: str,
-        base_currency: ty.Optional[ty.Union[str, ty.Iterable[str]]] = None,
-        lang: ty.Optional[str] = None,
+        base_currency: Optional[Union[str, Iterable[str]]] = None,
+        lang: Optional[str] = None,
     ):
         params = {
             "year": str(year),
@@ -102,8 +101,8 @@ class LLAPI:
         self,
         year: int,
         quote_currency: str,
-        base_currency: ty.Optional[ty.Union[str, ty.Iterable[str]]] = None,
-        lang: ty.Optional[str] = None,
+        base_currency: Optional[Union[str, Iterable[str]]] = None,
+        lang: Optional[str] = None,
     ):
         params = {"year": str(year), "currencyIsoCode": quote_currency}
         if isinstance(base_currency, str):
@@ -119,7 +118,7 @@ class LLAPI:
         end_date: datetime.date,
         base_currency: str,
         quote_currency: str,
-        lang: ty.Optional[str] = None,
+        lang: Optional[str] = None,
     ):
         return self._request_with_lang(
             "dailyTimeSeries",
@@ -140,7 +139,7 @@ class LLAPI:
         end_month: int,
         base_currency: str,
         quote_currency: str,
-        lang: ty.Optional[str] = None,
+        lang: Optional[str] = None,
     ):
         return self._request_with_lang(
             "monthlyTimeSeries",
@@ -161,7 +160,7 @@ class LLAPI:
         end_year: int,
         base_currency: str,
         quote_currency: str,
-        lang: ty.Optional[str] = None,
+        lang: Optional[str] = None,
     ):
         return self._request_with_lang(
             "annualTimeSeries",
